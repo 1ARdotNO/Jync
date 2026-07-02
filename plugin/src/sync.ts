@@ -13,10 +13,37 @@
 import { DataAdapter, normalizePath } from "obsidian";
 import { JmapClient } from "./jmap.ts";
 
+export type ConflictStrategy = "copy" | "prefer-local" | "prefer-remote";
+
 export interface JyncConfig {
   syncRoot: string; // vault-relative folder, e.g. "Jync"
   remoteRootName: string; // top-level FileNode folder name, e.g. "Jync"
   allowLocalDeletes: boolean;
+  ignore: string[]; // glob-ish patterns (relative to sync root) to exclude
+  conflictStrategy: ConflictStrategy;
+}
+
+/** Compile glob-ish ignore patterns into a matcher over sync-root-relative paths. */
+function makeIgnore(patterns: string[]): (rel: string) => boolean {
+  const compiled = patterns
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p0) => {
+      const p = p0.replace(/\/+$/, ""); // "foo/" -> "foo" (also matches its contents below)
+      const body = p
+        .split("/")
+        .map((seg) =>
+          seg
+            .replace(/[.+^${}()|[\]\\]/g, (c) => "\\" + c) // escape regex specials (not *)
+            .replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*")),
+        )
+        .join("/");
+      return new RegExp("^" + body + "(/.*)?$");
+    });
+  return (rel) => {
+    const base = rel.split("/").pop() ?? "";
+    return compiled.some((re) => re.test(rel) || re.test(base));
+  };
 }
 
 export interface SyncState {
@@ -63,29 +90,38 @@ export class SyncEngine {
     private cfg: JyncConfig,
     private state: SyncState,
     private saveState: (s: SyncState) => Promise<void>,
-  ) {}
+  ) {
+    this.isIgnored = makeIgnore(cfg.ignore ?? []);
+  }
+
+  private isIgnored: (rel: string) => boolean;
 
   private accountId(): string {
     return this.client.accountId();
   }
 
-  /** Recursively list every file (relative to syncRoot) plus every folder. */
+  /** Recursively list every file (relative to syncRoot) plus every folder, minus ignores. */
   private async scanLocal(): Promise<{ files: string[]; dirs: string[] }> {
     const root = normalizePath(this.cfg.syncRoot);
+    const prefix = root.length + 1;
     const files: string[] = [];
     const dirs: string[] = [];
     const walk = async (dir: string) => {
       const listing = await this.adapter.list(dir);
-      for (const f of listing.files) files.push(f);
+      for (const f of listing.files) {
+        const rel = f.slice(prefix);
+        if (!this.isIgnored(rel)) files.push(rel);
+      }
       for (const d of listing.folders) {
-        if (d.split("/").pop()?.startsWith(".")) continue; // skip .obsidian etc.
-        dirs.push(d);
+        const rel = d.slice(prefix);
+        if ((d.split("/").pop() ?? "").startsWith(".")) continue; // skip .obsidian etc.
+        if (this.isIgnored(rel)) continue;
+        dirs.push(rel);
         await walk(d);
       }
     };
     if (await this.adapter.exists(root)) await walk(root);
-    const rel = (p: string) => p.slice(root.length + 1);
-    return { files: files.map(rel), dirs: dirs.map(rel) };
+    return { files, dirs };
   }
 
   /** Ensure the top-level remote root folder exists; returns its node id. */
@@ -224,11 +260,21 @@ export class SyncEngine {
           localChanged = lh !== prev.hash;
         }
         if (localChanged) {
-          const cpath = rel.replace(/(\.[^.]+)?$/, (m) => ` (remote conflict)${m || ""}`);
-          await this.writeLocal(cpath, buf);
-          report.conflicts++;
-          log("CONFLICT — wrote remote copy to", cpath);
-          continue;
+          const strategy = this.cfg.conflictStrategy ?? "copy";
+          if (strategy === "prefer-local") {
+            // keep local; the push phase will overwrite the remote with it
+            log("conflict: local wins", rel);
+            continue;
+          }
+          if (strategy === "copy") {
+            const cpath = rel.replace(/(\.[^.]+)?$/, (m) => ` (remote conflict)${m || ""}`);
+            await this.writeLocal(cpath, buf);
+            report.conflicts++;
+            log("CONFLICT — wrote remote copy to", cpath);
+            continue;
+          }
+          // "prefer-remote": fall through and overwrite local with the remote version
+          log("conflict: remote wins", rel);
         }
         await this.writeLocal(rel, buf);
         this.state.files[rel] = { nodeId: node.id, hash: h, size: buf.byteLength };

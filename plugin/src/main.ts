@@ -1,6 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, debounce } from "obsidian";
 import { JmapClient } from "./jmap.ts";
-import { SyncEngine, SyncState, JyncConfig } from "./sync.ts";
+import { SyncEngine, SyncState, JyncConfig, ConflictStrategy } from "./sync.ts";
 
 interface JyncSettings extends JyncConfig {
   baseUrl: string;
@@ -17,6 +17,8 @@ const DEFAULTS: JyncSettings = {
   syncRoot: "Jync",
   remoteRootName: "Jync",
   allowLocalDeletes: false,
+  ignore: [".DS_Store", "*.tmp"],
+  conflictStrategy: "copy",
   autoSyncSeconds: 0,
   syncOnChange: true,
 };
@@ -96,7 +98,13 @@ export default class JyncPlugin extends Plugin {
       const engine = new SyncEngine(
         this.app.vault.adapter,
         client,
-        { syncRoot: this.settings.syncRoot, remoteRootName: this.settings.remoteRootName, allowLocalDeletes: this.settings.allowLocalDeletes },
+        {
+          syncRoot: this.settings.syncRoot,
+          remoteRootName: this.settings.remoteRootName,
+          allowLocalDeletes: this.settings.allowLocalDeletes,
+          ignore: this.settings.ignore,
+          conflictStrategy: this.settings.conflictStrategy,
+        },
         this.syncState,
         async (s) => { this.syncState = s; await this.persist(); },
       );
@@ -139,6 +147,15 @@ class JyncSettingTab extends PluginSettingTab {
       .addText((t) => t.setValue(s.syncRoot).onChange(async (v) => { s.syncRoot = v.trim().replace(/^\/+|\/+$/g, ""); await save(); }));
     new Setting(containerEl).setName("Remote root folder name")
       .addText((t) => t.setValue(s.remoteRootName).onChange(async (v) => { s.remoteRootName = v.trim(); await save(); }));
+    new Setting(containerEl).setName("Ignore patterns").setDesc("One glob per line, relative to sync root (e.g. *.tmp, Excalidraw/, **/drafts)")
+      .addTextArea((t) => { t.inputEl.rows = 4; t.setValue(s.ignore.join("\n")).onChange(async (v) => { s.ignore = v.split("\n").map((x) => x.trim()).filter(Boolean); await save(); }); });
+    new Setting(containerEl).setName("Conflict resolution").setDesc("When a note changed on both sides since the last sync")
+      .addDropdown((d) => d
+        .addOption("copy", "Keep both (write a conflict copy)")
+        .addOption("prefer-local", "Local wins")
+        .addOption("prefer-remote", "Remote wins")
+        .setValue(s.conflictStrategy)
+        .onChange(async (v) => { s.conflictStrategy = v as ConflictStrategy; await save(); }));
 
     new Setting(containerEl).setName("Sync on change").setDesc("Debounced sync when files under the root change")
       .addToggle((t) => t.setValue(s.syncOnChange).onChange(async (v) => { s.syncOnChange = v; await save(); }));
