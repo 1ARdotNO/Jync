@@ -17,15 +17,28 @@ because the **default transport is plaintext HTTP**).
 
 Fix in this order:
 
-- [ ] **1 — HIGH:** Path traversal on pull → arbitrary vault write → RCE. *(sync.ts)*
-- [ ] **2 — MEDIUM:** Auth header sent to server-controlled URLs → credential exfiltration. *(jmap.ts)*
-- [ ] **3 — MEDIUM:** Plaintext HTTP is the default; no TLS enforcement. *(main.ts / jmap.ts)*
-- [ ] **4 — MEDIUM:** Plaintext credential storage + default `admin` account. *(main.ts)*
-- [ ] **5 — LOW:** Server-advertised name/size constraints unenforced. *(sync.ts / jmap.ts)*
+- [x] **1 — HIGH:** Path traversal on pull → arbitrary vault write → RCE. *(sync.ts)*
+- [x] **2 — MEDIUM:** Auth header sent to server-controlled URLs → credential exfiltration. *(jmap.ts)*
+- [x] **3 — MEDIUM:** Plaintext HTTP is the default; no TLS enforcement. *(main.ts / jmap.ts)*
+- [x] **4 — MEDIUM:** Plaintext credential storage + default `admin` account. *(main.ts)* — partial
+- [x] **5 — LOW:** Server-advertised name/size constraints unenforced. *(sync.ts / jmap.ts)* — names done; size cap roadmap
 
 Finding 1 is the one that matters most — it's a client-side RCE, and findings 2–3 make its
 trigger easier to reach. Fixing 1 + 5 together is natural (both are "validate server-supplied
 names/sizes").
+
+## Remediation status (2026-07-02)
+
+| # | Fix landed | Where |
+|---|-----------|-------|
+| 1 | `safeSegment()` rejects traversal/illegal names in `remotePath()`; `writeLocal()` refuses any path outside the sync root | `plugin/src/sync.ts` |
+| 2 | `connect()` pins `apiUrl`/`uploadUrl`/`downloadUrl` to the configured origin; refuses cross-origin credential sends | `plugin/src/jmap.ts` |
+| 3 | `isInsecureUrl()` drives a settings warning + a sync-time console warning for plain-HTTP non-local hosts | `plugin/src/main.ts` |
+| 4 | Default `username` is now empty (no `admin` nudge). **Remaining:** OAuth bearer + non-plaintext storage (roadmap) | `plugin/src/main.ts` |
+| 5 | Name constraints enforced via `safeSegment()`. **Remaining:** blob-size ceiling (roadmap) | `plugin/src/sync.ts` |
+
+The residual items (OAuth/token storage for F4, blob-size cap for F5) remain on the
+project roadmap; TLS *enforcement* for F3 is deferred in favor of the OAuth direction.
 
 ---
 

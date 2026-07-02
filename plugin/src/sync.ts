@@ -76,6 +76,26 @@ const log = (...a: unknown[]) => console.log("[jync]", ...a);
 const ext = (p: string) => (p.includes(".") ? p.slice(p.lastIndexOf(".") + 1).toLowerCase() : "");
 const mimeOf = (p: string) => MIME[ext(p)] ?? "application/octet-stream";
 
+// Reject server-supplied node names that could escape the sync root or break the OS
+// (mirrors Stalwart's advertised forbiddenNameChars / reserved names). See SECURITY-REVIEW F1/F5.
+const FORBIDDEN_NAME_CHARS = /[/\\<>:"|?*]/;
+const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+function hasControlChar(s: string): boolean {
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) < 32) return true;
+  return false;
+}
+function safeSegment(name: string): boolean {
+  return (
+    !!name &&
+    name.length <= 255 &&
+    name !== "." &&
+    name !== ".." &&
+    !FORBIDDEN_NAME_CHARS.test(name) &&
+    !hasControlChar(name) &&
+    !RESERVED_NAME.test(name.split(".")[0])
+  );
+}
+
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", buf);
   return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -177,7 +197,10 @@ export class SyncEngine {
   }
 
   private async writeLocal(rel: string, buf: ArrayBuffer): Promise<void> {
-    const abs = normalizePath(this.cfg.syncRoot + "/" + rel);
+    const root = normalizePath(this.cfg.syncRoot);
+    const abs = normalizePath(root + "/" + rel);
+    // Belt-and-braces containment: never write outside the sync root (F1).
+    if (abs !== root && !abs.startsWith(root + "/")) throw new Error(`refusing write outside syncRoot: ${rel}`);
     const dir = abs.slice(0, abs.lastIndexOf("/"));
     if (dir && !(await this.adapter.exists(dir))) await this.adapter.mkdir(dir);
     await this.adapter.writeBinary(abs, buf);
@@ -196,6 +219,7 @@ export class SyncEngine {
         if (!node) return null;
         cache.set(cur, node);
       }
+      if (!safeSegment(node.name)) return null; // reject traversal / illegal server names (F1)
       parts.push(node.name);
       if (!node.parentId) return null; // reached a different top-level tree
       cur = node.parentId;
@@ -243,8 +267,8 @@ export class SyncEngine {
 
     for (const node of got.list ?? []) {
       if (node.nodeType === "directory") continue; // folders created implicitly on write
-      const rel = await this.remotePath(node.id, cache);
-      if (rel === null) continue; // not under our root
+      const rel = await this.remotePath(node.id, cache); // null if not under root or an unsafe name (F1)
+      if (rel === null) continue;
       const prev = this.state.files[rel];
       // skip if this is our own push echoed back (same blob we already have)
       if (prev && prev.nodeId === node.id) {

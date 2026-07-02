@@ -97,7 +97,18 @@ export class JmapClient {
       headers: { Authorization: this.auth },
     });
     if (res.status !== 200) throw new Error(`session ${res.status}: ${res.text?.slice(0, 200)}`);
-    this.session = res.json as JmapSession;
+    const s = res.json as JmapSession;
+    // Never send credentials cross-origin: pin the advertised endpoints to baseUrl's origin (F2).
+    const baseOrigin = new URL(this.base).origin;
+    for (const [k, u] of Object.entries({ apiUrl: s.apiUrl, uploadUrl: s.uploadUrl, downloadUrl: s.downloadUrl })) {
+      if (!u) continue;
+      const probe = u.replace(/\{[^}]+\}/g, "x"); // strip {accountId}/{blobId}/… templates
+      const absUrl = probe.startsWith("http") ? probe : this.base + probe;
+      if (new URL(absUrl).origin !== baseOrigin) {
+        throw new Error(`JMAP ${k} origin differs from ${baseOrigin}; refusing to send credentials cross-origin`);
+      }
+    }
+    this.session = s;
     return this.session;
   }
 

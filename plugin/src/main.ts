@@ -12,7 +12,7 @@ interface JyncSettings extends JyncConfig {
 
 const DEFAULTS: JyncSettings = {
   baseUrl: "http://localhost:8091",
-  username: "admin",
+  username: "", // no "admin" nudge — use a dedicated, least-privilege account (F4)
   password: "",
   syncRoot: "Jync",
   remoteRootName: "Jync",
@@ -29,6 +29,16 @@ interface PersistedData {
 }
 
 const EMPTY_STATE: SyncState = { folders: {}, files: {} };
+
+/** True when the URL sends Basic credentials in clear (plain http to a non-local host). F3. */
+function isInsecureUrl(baseUrl: string): boolean {
+  try {
+    const u = new URL(baseUrl);
+    return u.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+  } catch {
+    return true;
+  }
+}
 
 export default class JyncPlugin extends Plugin {
   settings!: JyncSettings;
@@ -94,6 +104,7 @@ export default class JyncPlugin extends Plugin {
     if (!this.settings.password) { new Notice("Jync: set a password in settings"); return; }
     this.syncing = true;
     this.setStatus("syncing…");
+    if (isInsecureUrl(this.settings.baseUrl)) console.warn("[jync] insecure transport: credentials sent over plain HTTP to a non-local host");
     try {
       const client = new JmapClient({ baseUrl: this.settings.baseUrl, user: this.settings.username, pass: this.settings.password });
       const engine = new SyncEngine(
@@ -161,6 +172,13 @@ class JyncSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl).setName("Server").setHeading();
+    if (isInsecureUrl(s.baseUrl)) {
+      const warn = new Setting(containerEl)
+        .setName("⚠ Insecure transport")
+        .setDesc("Credentials and content are sent over plain HTTP to a non-local host. Use HTTPS.");
+      warn.settingEl.addClass("mod-warning");
+      warn.nameEl.style.color = "var(--text-error)";
+    }
     new Setting(containerEl).setName("Server URL").setDesc("JMAP origin (e.g. your Stalwart server)")
       .addText((t) => t.setValue(s.baseUrl).onChange(async (v) => { s.baseUrl = v.trim(); await save(); }));
     new Setting(containerEl).setName("Username")
