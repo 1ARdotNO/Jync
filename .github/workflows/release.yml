@@ -1,0 +1,54 @@
+name: Release
+
+# Obsidian plugin release flow.
+# Tag a commit with the plugin version (NO "v" prefix, matching manifest.json), e.g.:
+#   git tag 1.0.0 && git push origin 1.0.0
+# This builds the plugin and publishes a GitHub Release with the exact asset files
+# Obsidian expects: manifest.json, main.js (and styles.css if present).
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install & build plugin
+        working-directory: plugin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER=$(node -p "require('./plugin/manifest.json').version")
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::tag '$TAG' does not match plugin/manifest.json version '$VER'"
+            exit 1
+          fi
+          echo "releasing $TAG"
+
+      - name: Create GitHub Release with Obsidian assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: plugin
+        run: |
+          assets="manifest.json main.js"
+          [ -f styles.css ] && assets="$assets styles.css"
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            $assets
