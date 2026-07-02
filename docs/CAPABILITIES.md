@@ -40,6 +40,15 @@ in the browser. Two things to know for that setup:
 - **Community plugins.** Enable community plugins in the vault so Jync loads, the same as any
   Obsidian plugin.
 
+## Mobile
+
+The plugin is built to run on Obsidian mobile (`isDesktopOnly: false`). It uses only
+mobile-safe APIs — Obsidian's `requestUrl`, the vault `DataAdapter`, and web-standard
+`crypto.subtle` / `btoa` / `TextEncoder` — with **no** Node built-ins (`fs`, `Buffer`,
+`child_process`) or Electron/`FileSystemAdapter` calls. `crypto.subtle` (used for content
+hashing) requires a secure context, which Obsidian mobile provides. No desktop-only
+dependencies are present; on-device testing is recommended before relying on it.
+
 ## Try it
 
 ```bash
