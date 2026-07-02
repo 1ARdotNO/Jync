@@ -5,7 +5,7 @@
  * of `fetch`, and web-standard base64 instead of Node `Buffer`. Mirrors the
  * de-risked Node prototype in ../../src/jmap.ts.
  */
-import { requestUrl, RequestUrlParam } from "obsidian";
+import { requestUrl, RequestUrlParam, RequestUrlResponse } from "obsidian";
 
 const CORE = "urn:ietf:params:jmap:core";
 const FILENODE = "urn:ietf:params:jmap:filenode";
@@ -42,22 +42,59 @@ function b64(s: string): string {
 export class JmapClient {
   private base: string;
   private auth: string;
+  private retries: number;
+  private baseDelay: number;
   session!: JmapSession;
 
-  constructor(opts: { baseUrl: string; user: string; pass: string }) {
+  constructor(opts: { baseUrl: string; user: string; pass: string; retries?: number; baseDelay?: number }) {
     this.base = opts.baseUrl.replace(/\/+$/, "");
     this.auth = "Basic " + b64(`${opts.user}:${opts.pass}`);
+    this.retries = opts.retries ?? 3;
+    this.baseDelay = opts.baseDelay ?? 400;
   }
 
   private abs(url: string): string {
     return url.startsWith("http") ? url : this.base + url;
   }
 
+  /** requestUrl with retry + backoff on transient failures (network error, 429, 5xx). */
+  private async req(params: RequestUrlParam): Promise<RequestUrlResponse> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await requestUrl({ ...params, throw: false });
+        const transient = res.status === 429 || (res.status >= 500 && res.status <= 599);
+        if (transient && attempt < this.retries) {
+          await this.backoff(attempt, res);
+          continue;
+        }
+        return res;
+      } catch (e) {
+        // network-level failure (offline, DNS, reset) — retry, then surface.
+        if (attempt < this.retries) {
+          await this.backoff(attempt);
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
+  /** Exponential backoff with jitter; honors Retry-After when the server sends it. */
+  private backoff(attempt: number, res?: RequestUrlResponse): Promise<void> {
+    let ms = this.baseDelay * 2 ** attempt;
+    const ra = res?.headers?.["retry-after"] ?? res?.headers?.["Retry-After"];
+    if (ra) {
+      const s = parseInt(ra, 10);
+      if (!Number.isNaN(s)) ms = s * 1000;
+    }
+    ms += Math.floor(Math.random() * 200);
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   async connect(): Promise<JmapSession> {
-    const res = await requestUrl({
+    const res = await this.req({
       url: this.base + "/jmap/session",
       headers: { Authorization: this.auth },
-      throw: false,
     });
     if (res.status !== 200) throw new Error(`session ${res.status}: ${res.text?.slice(0, 200)}`);
     this.session = res.json as JmapSession;
@@ -75,12 +112,11 @@ export class JmapClient {
   }
 
   async request(methodCalls: MethodCall[], using: string[] = [CORE, FILENODE, BLOB]): Promise<MethodResponse[]> {
-    const res = await requestUrl({
+    const res = await this.req({
       url: this.abs(this.session.apiUrl),
       method: "POST",
       headers: { Authorization: this.auth, "Content-Type": "application/json" },
       body: JSON.stringify({ using, methodCalls }),
-      throw: false,
     } as RequestUrlParam);
     if (res.status !== 200) throw new Error(`api ${res.status}: ${res.text?.slice(0, 300)}`);
     return res.json.methodResponses as MethodResponse[];
@@ -95,12 +131,11 @@ export class JmapClient {
 
   async uploadBlob(accountId: string, data: ArrayBuffer | string, type: string): Promise<BlobUploadResult> {
     const url = this.abs(this.session.uploadUrl.replace("{accountId}", accountId));
-    const res = await requestUrl({
+    const res = await this.req({
       url,
       method: "POST",
       headers: { Authorization: this.auth, "Content-Type": type },
       body: typeof data === "string" ? new TextEncoder().encode(data).buffer : data,
-      throw: false,
     } as RequestUrlParam);
     if (res.status !== 200 && res.status !== 201) throw new Error(`upload ${res.status}: ${res.text?.slice(0, 200)}`);
     return res.json as BlobUploadResult;
@@ -114,7 +149,7 @@ export class JmapClient {
         .replace("{name}", encodeURIComponent(name))
         .replace("{type}", encodeURIComponent(type)),
     );
-    const res = await requestUrl({ url, headers: { Authorization: this.auth }, throw: false });
+    const res = await this.req({ url, headers: { Authorization: this.auth } });
     if (res.status !== 200) throw new Error(`download ${res.status}`);
     return res.arrayBuffer;
   }
