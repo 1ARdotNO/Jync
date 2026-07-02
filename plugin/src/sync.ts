@@ -30,6 +30,7 @@ export interface SyncReport {
   pulled: number;
   pushedNew: number;
   pushedEdit: number;
+  movedRemote: number;
   deletedRemote: number;
   deletedLocal: number;
   conflicts: number;
@@ -244,7 +245,7 @@ export class SyncEngine {
     }
   }
 
-  /** PUSH: create/edit/delete remote to match local. */
+  /** PUSH: create/edit/move/delete remote to match local. */
   private async push(report: SyncReport): Promise<void> {
     const acc = this.accountId();
     const { files, dirs } = await this.scanLocal();
@@ -252,14 +253,50 @@ export class SyncEngine {
     // ensure folders (shallow-first)
     for (const d of dirs.sort((a, b) => a.split("/").length - b.split("/").length)) await this.ensureDir(d);
 
-    const seen = new Set<string>();
+    // Read + hash every local file up front so we can detect renames/moves.
+    const local = new Map<string, { buf: ArrayBuffer; hash: string }>();
     for (const rel of files) {
-      seen.add(rel);
       try {
         const buf = await this.readLocal(rel);
-        const hash = await sha256Hex(buf);
-        const prev = this.state.files[rel];
-        if (prev && prev.hash === hash) continue; // unchanged
+        local.set(rel, { buf, hash: await sha256Hex(buf) });
+      } catch (e: any) {
+        report.errors.push(`read ${rel}: ${e.message}`);
+      }
+    }
+
+    // Tracked paths no longer present locally, indexed by content hash for move detection.
+    const deletions = Object.keys(this.state.files).filter((r) => !local.has(r));
+    const deletedByHash = new Map<string, string>();
+    for (const rel of deletions) if (!deletedByHash.has(this.state.files[rel].hash)) deletedByHash.set(this.state.files[rel].hash, rel);
+    const consumed = new Set<string>();
+
+    // 1) Renames/moves: a new local path whose content matches a deleted path ->
+    //    move the existing node (name + parentId) instead of re-uploading the blob.
+    for (const [rel, { hash }] of local) {
+      if (this.state.files[rel]) continue; // already tracked here
+      const oldRel = deletedByHash.get(hash);
+      if (!oldRel || consumed.has(oldRel)) continue;
+      try {
+        const rec = this.state.files[oldRel];
+        const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+        const parentId = await this.ensureDir(parentRel);
+        const name = rel.split("/").pop()!;
+        await this.client.call("FileNode/set", { accountId: acc, update: { [rec.nodeId]: { name, parentId } } });
+        this.state.files[rel] = { nodeId: rec.nodeId, hash: rec.hash, size: rec.size };
+        delete this.state.files[oldRel];
+        consumed.add(oldRel);
+        report.movedRemote++;
+        log("push move", oldRel, "->", rel);
+      } catch (e: any) {
+        report.errors.push(`move ${oldRel} -> ${rel}: ${e.message}`);
+      }
+    }
+
+    // 2) Create / edit.
+    for (const [rel, { buf, hash }] of local) {
+      const prev = this.state.files[rel];
+      if (prev && prev.hash === hash) continue; // unchanged (incl. just-moved nodes)
+      try {
         const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
         const parentId = await this.ensureDir(parentRel);
         const name = rel.split("/").pop()!;
@@ -298,10 +335,11 @@ export class SyncEngine {
       }
     }
 
-    // local deletions -> remote destroy
-    for (const rel of Object.keys(this.state.files)) {
-      if (seen.has(rel)) continue;
+    // 3) Deletions not consumed by a move -> destroy remote.
+    for (const rel of deletions) {
+      if (consumed.has(rel)) continue;
       const rec = this.state.files[rel];
+      if (!rec) continue;
       try {
         await this.client.call("FileNode/set", { accountId: acc, destroy: [rec.nodeId] });
         delete this.state.files[rel];
@@ -317,7 +355,7 @@ export class SyncEngine {
   async sync(): Promise<SyncReport> {
     if (this.running) throw new Error("sync already running");
     this.running = true;
-    const report: SyncReport = { pulled: 0, pushedNew: 0, pushedEdit: 0, deletedRemote: 0, deletedLocal: 0, conflicts: 0, errors: [] };
+    const report: SyncReport = { pulled: 0, pushedNew: 0, pushedEdit: 0, movedRemote: 0, deletedRemote: 0, deletedLocal: 0, conflicts: 0, errors: [] };
     try {
       if (!this.client.session) await this.client.connect();
       if (!this.client.hasFileNode()) throw new Error("server does not advertise JMAP FileNode");

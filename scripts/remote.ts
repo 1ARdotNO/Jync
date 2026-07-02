@@ -71,5 +71,5 @@ for (const r of rows) {
     const sha = createHash("sha256").update(Buffer.from(buf)).digest("hex").slice(0, 12);
     extra = `  sha256=${sha} dl=${buf.byteLength}b`;
   }
-  console.log(`  ${r.type === "directory" ? "DIR " : "file"}  ${r.path.padEnd(22)} ${String(r.size ?? "").padStart(6)}  ${r.mime ?? ""}${extra}`);
+  console.log(`  ${r.type === "directory" ? "DIR " : "file"}  ${r.path.padEnd(22)} ${String(r.size ?? "").padStart(6)}  id=${r.id} blob=${(r.blobId ?? "").slice(-8)}  ${r.mime ?? ""}${extra}`);
 }

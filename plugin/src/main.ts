@@ -102,7 +102,7 @@ export default class JyncPlugin extends Plugin {
       );
       const r = await engine.sync();
       this.lastReport = r;
-      const summary = `↓${r.pulled} +${r.pushedNew} ~${r.pushedEdit} -${r.deletedRemote} !${r.conflicts}`;
+      const summary = `↓${r.pulled} +${r.pushedNew} ~${r.pushedEdit} →${r.movedRemote} -${r.deletedRemote} !${r.conflicts}`;
       this.setStatus(summary);
       if (trigger === "manual") new Notice(`Jync synced: ${summary}` + (r.errors.length ? ` (${r.errors.length} errors)` : ""));
       if (r.errors.length) console.error("[jync] errors", r.errors);
