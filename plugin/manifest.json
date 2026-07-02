@@ -1,0 +1,9 @@
+{
+  "id": "jync",
+  "name": "Jync",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Sync a vault subtree to a JMAP FileNode backend (e.g. Stalwart).",
+  "author": "Jync",
+  "isDesktopOnly": false
+}

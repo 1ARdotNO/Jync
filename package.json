@@ -1,0 +1,15 @@
+{
+  "name": "jync",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Obsidian <-> JMAP FileNode sync (Stalwart backend). Prototype phase.",
+  "engines": { "node": ">=23" },
+  "scripts": {
+    "stalwart:up": "docker compose up -d",
+    "stalwart:down": "docker compose down",
+    "stalwart:pass": "docker compose logs stalwart | grep -A2 'password' | tail -3",
+    "roundtrip": "node src/roundtrip.ts",
+    "probe:edit": "node src/probe-edit.ts"
+  }
+}

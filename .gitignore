@@ -1,0 +1,9 @@
+node_modules/
+stalwart-data/
+*.log
+.DS_Store
+.env
+
+# build artifacts (built via `npm run build`)
+plugin/main.js
+plugin/data.json

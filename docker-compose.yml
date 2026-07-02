@@ -1,0 +1,21 @@
+# Local Stalwart for Jync development.
+#   docker compose up -d
+# First boot prints a temporary admin password in the logs:
+#   docker compose logs stalwart | grep -A3 password
+# Pin it instead by setting STALWART_RECOVERY_ADMIN below.
+services:
+  stalwart:
+    image: stalwartlabs/stalwart:latest
+    container_name: jync-stalwart
+    restart: unless-stopped
+    environment:
+      # Uncomment to pin a stable admin credential across rebuilds:
+      # STALWART_RECOVERY_ADMIN: "admin:jync-dev-password"
+      RUST_LOG: "info"
+    ports:
+      - "8090:443"    # HTTPS / JMAP (TLS, self-signed)
+      - "8091:8080"   # HTTP / JMAP + web admin (dev, plaintext)
+      - "8025:25"     # SMTP (unused by Jync, exposed for completeness)
+      - "8143:143"    # IMAP
+    volumes:
+      - ./stalwart-data:/opt/stalwart
