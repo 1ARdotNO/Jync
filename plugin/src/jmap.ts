@@ -6,6 +6,7 @@
  * de-risked Node prototype in ../../src/jmap.ts.
  */
 import { requestUrl, RequestUrlParam, RequestUrlResponse } from "obsidian";
+import { JmapAuth, buildAuthHeader } from "./paths.ts";
 
 const CORE = "urn:ietf:params:jmap:core";
 const FILENODE = "urn:ietf:params:jmap:filenode";
@@ -31,14 +32,6 @@ export interface BlobUploadResult {
 export type MethodCall = [method: string, args: Record<string, unknown>, callId: string];
 export type MethodResponse = [method: string, result: Record<string, any>, callId: string];
 
-/** UTF-8 safe base64 for Basic auth (avoids Node Buffer). */
-function b64(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
 export class JmapClient {
   private base: string;
   private auth: string;
@@ -46,9 +39,9 @@ export class JmapClient {
   private baseDelay: number;
   session!: JmapSession;
 
-  constructor(opts: { baseUrl: string; user: string; pass: string; retries?: number; baseDelay?: number }) {
+  constructor(opts: { baseUrl: string; auth: JmapAuth; retries?: number; baseDelay?: number }) {
     this.base = opts.baseUrl.replace(/\/+$/, "");
-    this.auth = "Basic " + b64(`${opts.user}:${opts.pass}`);
+    this.auth = buildAuthHeader(opts.auth);
     this.retries = opts.retries ?? 3;
     this.baseDelay = opts.baseDelay ?? 400;
   }

@@ -1,19 +1,24 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, debounce } from "obsidian";
 import { JmapClient } from "./jmap.ts";
 import { SyncEngine, SyncState, SyncReport, JyncConfig, ConflictStrategy } from "./sync.ts";
+import { JmapAuth } from "./paths.ts";
 
 interface JyncSettings extends JyncConfig {
   baseUrl: string;
+  authMode: "basic" | "bearer";
   username: string;
   password: string;
+  token: string;
   autoSyncSeconds: number;
   syncOnChange: boolean;
 }
 
 const DEFAULTS: JyncSettings = {
   baseUrl: "http://localhost:8091",
+  authMode: "basic",
   username: "", // no "admin" nudge — use a dedicated, least-privilege account (F4)
   password: "",
+  token: "", // bearer token (OAuth access token or app token) when authMode = bearer
   syncRoot: "Jync",
   remoteRootName: "Jync",
   allowLocalDeletes: false,
@@ -99,14 +104,22 @@ export default class JyncPlugin extends Plugin {
     await this.saveData(data);
   }
 
+  /** Build JMAP auth from settings, or null if credentials are missing. */
+  authOrNull(): JmapAuth | null {
+    const s = this.settings;
+    if (s.authMode === "bearer") return s.token ? { type: "bearer", token: s.token } : null;
+    return s.password ? { type: "basic", user: s.username, pass: s.password } : null;
+  }
+
   async runSync(trigger: string) {
     if (this.syncing) return;
-    if (!this.settings.password) { new Notice("Jync: set a password in settings"); return; }
+    const auth = this.authOrNull();
+    if (!auth) { new Notice("Jync: set credentials in settings"); return; }
     this.syncing = true;
     this.setStatus("syncing…");
     if (isInsecureUrl(this.settings.baseUrl)) console.warn("[jync] insecure transport: credentials sent over plain HTTP to a non-local host");
     try {
-      const client = new JmapClient({ baseUrl: this.settings.baseUrl, user: this.settings.username, pass: this.settings.password });
+      const client = new JmapClient({ baseUrl: this.settings.baseUrl, auth });
       const engine = new SyncEngine(
         this.app.vault.adapter,
         client,
@@ -139,9 +152,10 @@ export default class JyncPlugin extends Plugin {
 
   /** Verify server URL + credentials and that JMAP FileNode is available. */
   async testConnection(): Promise<string> {
-    if (!this.settings.password) return "Set a password/token first";
+    const auth = this.authOrNull();
+    if (!auth) return "Set credentials first";
     try {
-      const client = new JmapClient({ baseUrl: this.settings.baseUrl, user: this.settings.username, pass: this.settings.password });
+      const client = new JmapClient({ baseUrl: this.settings.baseUrl, auth });
       const session = await client.connect();
       if (!client.hasFileNode()) return `Connected as ${session.username}, but the server does not advertise JMAP FileNode`;
       return `OK — connected as ${session.username}; FileNode available`;
@@ -181,10 +195,21 @@ class JyncSettingTab extends PluginSettingTab {
     }
     new Setting(containerEl).setName("Server URL").setDesc("JMAP origin (e.g. your Stalwart server)")
       .addText((t) => t.setValue(s.baseUrl).onChange(async (v) => { s.baseUrl = v.trim(); await save(); }));
-    new Setting(containerEl).setName("Username")
-      .addText((t) => t.setValue(s.username).onChange(async (v) => { s.username = v.trim(); await save(); }));
-    new Setting(containerEl).setName("Password / token").setDesc("Stored in the plugin's data.json — prefer a scoped token")
-      .addText((t) => { t.inputEl.type = "password"; t.setValue(s.password).onChange(async (v) => { s.password = v; await save(); }); });
+    new Setting(containerEl).setName("Authentication").setDesc("Bearer token (OAuth / app token) is preferred over a password")
+      .addDropdown((d) => d
+        .addOption("basic", "Username + password")
+        .addOption("bearer", "Bearer token")
+        .setValue(s.authMode)
+        .onChange(async (v) => { s.authMode = v as "basic" | "bearer"; await save(); this.display(); }));
+    if (s.authMode === "bearer") {
+      new Setting(containerEl).setName("Bearer token").setDesc("An OAuth access token or app token; sent as Authorization: Bearer")
+        .addText((t) => { t.inputEl.type = "password"; t.setValue(s.token).onChange(async (v) => { s.token = v.trim(); await save(); }); });
+    } else {
+      new Setting(containerEl).setName("Username")
+        .addText((t) => t.setValue(s.username).onChange(async (v) => { s.username = v.trim(); await save(); }));
+      new Setting(containerEl).setName("Password").setDesc("Stored in the plugin's data.json — prefer a dedicated, scoped account")
+        .addText((t) => { t.inputEl.type = "password"; t.setValue(s.password).onChange(async (v) => { s.password = v; await save(); }); });
+    }
     new Setting(containerEl).setName("Connection").setDesc("Verify the URL, credentials, and FileNode support")
       .addButton((b) => b.setButtonText("Test connection").onClick(async () => {
         b.setButtonText("Testing…").setDisabled(true);

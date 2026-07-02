@@ -106,7 +106,7 @@ Contributing? See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Reporting a vulnerabil
 Jync is pre-1.0 and under active development toward the Obsidian community store. Known
 limitations on the roadmap:
 
-- 🔐 Authentication is HTTP Basic today; OAuth 2.0 bearer tokens are coming.
+- 🔐 Authentication supports HTTP Basic or a bearer token (OAuth access/app token); interactive OAuth sign-in is planned.
 - ✏️ Rename re-uploads content instead of moving the node in place.
 - 📈 Push rescans the sync-root each cycle (an mtime fast-path is planned for very large vaults).
 - 📄 JMAP FileNode is an IETF draft (`draft-ietf-jmap-filenode`); the wire format may still change.

@@ -17,8 +17,9 @@ your mail/calendar/contacts.
 Create (or use) an account on the server and note its credentials.
 
 > **Do not sync with the admin credential.** Create a dedicated, least-privilege user.
-> Jync authenticates with HTTP Basic today, so **use `https://`** for any non-local
-> server — over plain HTTP the credentials cross the wire in clear.
+> Jync supports two auth modes: **username + password** (HTTP Basic) or a **bearer token**
+> (an OAuth access token or app token — preferred). Either way, **use `https://`** for any
+> non-local server, since Basic credentials otherwise cross the wire in clear.
 
 ## 3. Install the plugin
 
@@ -41,7 +42,8 @@ Open *Settings → Jync* and set:
 | Field | Value |
 |-------|-------|
 | Server URL | your JMAP origin, e.g. `https://mail.example.com` |
-| Username / Password | your dedicated account's credentials |
+| Authentication | *Username + password* or *Bearer token* (OAuth/app token — preferred) |
+| Credentials | your dedicated account's password, or a scoped bearer token |
 | Sync root | the vault folder to sync (only this subtree is touched) |
 | Remote root folder | top-level folder name to create on the server |
 | Ignore patterns | globs to exclude (e.g. `*.tmp`, `Excalidraw/`) |

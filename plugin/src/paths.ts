@@ -4,6 +4,22 @@
  * path against traversal/illegal names (see docs/SECURITY-REVIEW.md F1/F5).
  */
 
+/** JMAP authentication: HTTP Basic (user/pass) or a bearer token (OAuth / app token). */
+export type JmapAuth = { type: "basic"; user: string; pass: string } | { type: "bearer"; token: string };
+
+/** UTF-8 safe base64 (avoids Node Buffer; works in browser and Node). */
+export function b64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (const byte of bytes) bin += String.fromCharCode(byte);
+  return btoa(bin);
+}
+
+/** Build the Authorization header value for the chosen auth. */
+export function buildAuthHeader(auth: JmapAuth): string {
+  return auth.type === "bearer" ? `Bearer ${auth.token}` : "Basic " + b64(`${auth.user}:${auth.pass}`);
+}
+
 const MIME: Record<string, string> = {
   md: "text/markdown", txt: "text/plain", json: "application/json", canvas: "application/json",
   csv: "text/csv", yml: "text/yaml", yaml: "text/yaml", css: "text/css", html: "text/html",

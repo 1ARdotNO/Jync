@@ -34,11 +34,12 @@ names/sizes").
 | 1 | `safeSegment()` rejects traversal/illegal names in `remotePath()`; `writeLocal()` refuses any path outside the sync root | `plugin/src/sync.ts` |
 | 2 | `connect()` pins `apiUrl`/`uploadUrl`/`downloadUrl` to the configured origin; refuses cross-origin credential sends | `plugin/src/jmap.ts` |
 | 3 | `isInsecureUrl()` drives a settings warning + a sync-time console warning for plain-HTTP non-local hosts | `plugin/src/main.ts` |
-| 4 | Default `username` is now empty (no `admin` nudge). **Remaining:** OAuth bearer + non-plaintext storage (roadmap) | `plugin/src/main.ts` |
+| 4 | Default `username` empty (no `admin` nudge); **bearer-token auth added** — use an OAuth access/app token instead of Basic. **Remaining:** interactive OAuth sign-in + non-plaintext token storage | `plugin/src/main.ts`, `plugin/src/paths.ts` |
 | 5 | Name constraints enforced via `safeSegment()`. **Remaining:** blob-size ceiling (roadmap) | `plugin/src/sync.ts` |
 
-The residual items (OAuth/token storage for F4, blob-size cap for F5) remain on the
-project roadmap; TLS *enforcement* for F3 is deferred in favor of the OAuth direction.
+Residual items: interactive OAuth device-flow sign-in and non-plaintext token storage
+(F4), and a blob-size cap (F5). TLS *enforcement* for F3 is deferred in favor of the
+bearer-token direction now available.
 
 ---
 
