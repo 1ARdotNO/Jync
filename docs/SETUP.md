@@ -23,7 +23,11 @@ Create (or use) an account on the server and note its credentials.
 
 ## 3. Install the plugin
 
-Until Jync is in the community store, install it manually:
+**Recommended (beta): [BRAT](https://github.com/TfThacker/obsidian42-brat).** Install BRAT
+from the community store, then *Add beta plugin* → `1ARdotNO/Jync` → enable **Jync** in
+*Settings → Community plugins*. BRAT installs the latest release and auto-updates it.
+
+Or build and install manually:
 
 ```bash
 cd plugin

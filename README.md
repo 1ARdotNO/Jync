@@ -45,8 +45,12 @@ docker compose logs stalwart | grep -A2 password      # grab the admin password
 
 # 2. Build the Obsidian plugin
 cd plugin && npm install && npm run build
-#    → drop manifest.json + main.js into <vault>/.obsidian/plugins/jync/ and enable it
+#    → drop manifest.json (repo root) + main.js into <vault>/.obsidian/plugins/jync/ and enable it
 ```
+
+**Or install the beta with [BRAT](https://github.com/TfThacker/obsidian42-brat)** (no build needed):
+install BRAT from the community store → *Add beta plugin* → enter `1ARdotNO/Jync` → enable **Jync**
+in *Settings → Community plugins*. BRAT tracks each new release automatically.
 
 Open **Settings → Jync**, enter your server URL and credentials, pick a **sync-root folder**,
 and hit sync. That's it.
