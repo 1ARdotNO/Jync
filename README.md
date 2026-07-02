@@ -19,63 +19,53 @@ backend like [Stalwart](https://stalw.art) and asks the server one question —
 The server answers with an exact delta. No scanning the world. No guessing. Just the diff.
 
 And because a JMAP server like Stalwart already serves your **mail, calendar, and
-contacts**, your notes come home to live right next to them. One server. One protocol.
-One backup.
+contacts**, your notes live right next to them. One server. One protocol. One backup.
 
 ## ✨ Features
 
-- 🔁 **True incremental sync** — powered by `FileNode/changes` state tokens, not directory polling.
+- 🔁 **True incremental sync** — driven by `FileNode/changes` state tokens, not directory polling.
 - 🧠 **Bidirectional** — edits flow both ways: local→remote *and* remote→local.
-- 🛟 **Conflict-safe by design** — edit the same note in two places? You get a
+- 🛟 **Conflict-safe by design** — edit the same note in two places and you get a
   `… (remote conflict).md` copy, **never** a silent overwrite.
-- 📦 **Every file type** — markdown, canvas, JSON, images, PDFs, big files — verified byte-exact.
+- 📦 **Any file type** — markdown, canvas, JSON, images, PDFs, large files — content is
+  synced byte-for-byte.
 - 🌳 **Scoped & safe** — sync one folder or the whole vault; local deletes are **off by default**.
-- ♻️ **Idempotent** — a no-op sync does nothing; re-attaching to an existing backend
-  *adopts* what's there instead of exploding.
-- 🌐 **Browser-ready** — 100% browser-safe (`requestUrl` + web-crypto), so it even runs
-  inside [ignis](https://github.com/Nystik-gh/ignis) browser Obsidian.
-- 🪶 **Zero-dependency core** — the JMAP client is plain TypeScript on native primitives.
+- ♻️ **Idempotent** — a no-op sync does nothing, and pointing Jync at a backend that already
+  has your notes *adopts* them instead of duplicating.
+- 🌐 **Browser-ready** — 100% browser-safe (`requestUrl` + web-crypto), so it runs on desktop,
+  mobile, and inside [ignis](https://github.com/Nystik-gh/ignis) browser Obsidian alike.
+- 🪶 **Lightweight core** — the JMAP client is plain TypeScript on native primitives, no heavy deps.
 
 ## 🚀 Quick start
 
 ```bash
-# 1. Spin up a local JMAP backend
+# 1. Spin up a JMAP backend (or point Jync at an existing Stalwart server)
 docker compose up -d
 docker compose logs stalwart | grep -A2 password      # grab the admin password
 
-# 2. Prove the protocol end-to-end (no dependencies)
-JYNC_PASS=<password> node src/roundtrip.ts
-
-# 3. Build the Obsidian plugin
+# 2. Build the Obsidian plugin
 cd plugin && npm install && npm run build
 #    → drop manifest.json + main.js into <vault>/.obsidian/plugins/jync/ and enable it
 ```
 
-Point it at your server, pick a **sync-root folder**, and hit sync. That's it.
+Open **Settings → Jync**, enter your server URL and credentials, pick a **sync-root folder**,
+and hit sync. That's it.
 
-## 🎬 What it looks like
+## 🎬 Conflict-safe sync in action
 
 ```text
-[jync] push new  big.md
-[jync] push new  board.canvas
-[jync] push new  pixel.png
-[jync] pull update welcome.md
-[jync] CONFLICT — wrote remote copy to welcome (remote conflict).md
+[jync] push new  meeting-notes.md
+[jync] push new  diagram.canvas
+[jync] push new  screenshot.png
+[jync] pull update roadmap.md
+[jync] CONFLICT — kept both: roadmap.md and "roadmap (remote conflict).md"
 [jync] sync done {pulled: 2, pushedNew: 8, pushedEdit: 1, deletedRemote: 0, conflicts: 1}
 ```
 
-Every one of those operations has been run through **real browser Obsidian → Stalwart**
-with content verified byte-for-byte. The receipts are in the docs. 👇
+Edit a note on your laptop and your phone before they sync, and Jync keeps **both** versions —
+your work is never silently clobbered.
 
-## 📚 Documentation
-
-| Doc | What's inside |
-|-----|---------------|
-| 📐 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | The FileNode model, the two-way sync loop, conflict handling, and safety guarantees |
-| 🔬 [`docs/FINDINGS.md`](./docs/FINDINGS.md) | Feasibility research: why JMAP FileNode works, Stalwart quirks, and the ignis integration paths |
-| ✅ [`docs/TEST-RESULTS.md`](./docs/TEST-RESULTS.md) | Full end-to-end validation of every sync operation through browser Obsidian |
-
-## 🧭 How it works (the 10-second version)
+## 🧭 How it works
 
 ```
         pull: FileNode/changes since <token>          push: hash-diff the subtree
@@ -85,29 +75,37 @@ with content verified byte-for-byte. The receipts are in the docs. 👇
    └───────────────────────────────────────┘   └───────────────────────────────────┘
 ```
 
-Content rides on JMAP blobs; a `FileNode` links name + parent + blob. Full details in
+Content rides on JMAP blobs; a `FileNode` links name + parent + blob. The pull baseline
+advances past your own writes each cycle, so nothing ping-pongs. Full design in
 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+
+## 📚 Documentation
+
+| Doc | What's inside |
+|-----|---------------|
+| 📐 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | The FileNode model, the two-way sync loop, conflict handling, and safety guarantees |
+| 📋 [`docs/CAPABILITIES.md`](./docs/CAPABILITIES.md) | Supported operations, file types, and behavior; plus running under ignis |
+| 🔬 [`docs/FINDINGS.md`](./docs/FINDINGS.md) | Design notes: why JMAP FileNode, Stalwart specifics, and the ignis integration paths |
 
 ## 🗂️ Repository layout
 
 | Path | What |
 |------|------|
-| `src/` | Dependency-free Node JMAP client + de-risking scripts (`roundtrip.ts`, `probe-edit.ts`) |
 | `plugin/` | The Obsidian plugin — browser-safe client, sync engine, settings |
-| `scripts/remote.ts` | Server-side helper: inspect / reset / verify the FileNode tree |
-| `e2e/run.mjs` | Headless-browser harness driving the plugin inside Obsidian |
+| `src/` | Standalone Node JMAP client + example scripts (`roundtrip.ts`, `probe-edit.ts`) |
+| `scripts/remote.ts` | Server-side helper: inspect / reset the FileNode tree |
+| `e2e/run.mjs` | Headless-browser harness for driving the plugin inside Obsidian |
 | `docker-compose.yml` | Local Stalwart with FileNode enabled |
 
-## 🚦 Status & honest caveats
+## 🚦 Status
 
-Jync is a **working prototype** — every sync operation is implemented and verified
-end-to-end — but it is **not production-hardened yet**:
+Jync is pre-1.0 and under active development toward the Obsidian community store. Known
+limitations on the roadmap:
 
-- 🔐 Auth is HTTP Basic and credentials sit in the plugin's `data.json`. Move to OAuth 2.0
-  bearer tokens + a dedicated account before trusting it with real data.
-- ✏️ Rename is delete + recreate (re-uploads content) rather than a metadata move.
-- 📈 Push scans the full sync-root each run; a large tree wants an mtime fast-path.
-- 📄 JMAP FileNode is an IETF draft (`draft-ietf-jmap-filenode`) — the wire format may shift.
+- 🔐 Authentication is HTTP Basic today; OAuth 2.0 bearer tokens are coming.
+- ✏️ Rename re-uploads content instead of moving the node in place.
+- 📈 Push rescans the sync-root each cycle (an mtime fast-path is planned for very large vaults).
+- 📄 JMAP FileNode is an IETF draft (`draft-ietf-jmap-filenode`); the wire format may still change.
 
 Contributions and issues welcome.
 

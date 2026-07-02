@@ -53,8 +53,7 @@ a sibling `… (remote conflict).md` copy and keeps the local edit (which then p
 The plugin is browser-safe: it uses Obsidian's `requestUrl` (not `fetch`) and web-crypto
 (not Node `Buffer`). Under [ignis](https://github.com/Nystik-gh/ignis), `requestUrl` is
 proxied server-side, so reaching a self-hosted backend requires allow-listing it past
-ignis's SSRF guard. The full validation — every operation exercised through real browser
-Obsidian — is in [`TEST-RESULTS.md`](./TEST-RESULTS.md).
+ignis's SSRF guard. See [`CAPABILITIES.md`](./CAPABILITIES.md) for the ignis setup notes.
 
 ## Two deployment shapes
 

@@ -1,14 +1,16 @@
-# Jync — feasibility findings (prototype)
+# Jync — design notes
 
-De-risking run against **Stalwart 0.16.11**, `urn:ietf:params:jmap:filenode` +
-`:blob` capabilities live. Everything below was verified end-to-end by
-`src/roundtrip.ts` and `src/probe-edit.ts`.
+Why Jync is built on JMAP FileNode, and the Stalwart-specific details that shape the
+sync engine. Reference notes for contributors; see [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+for the runtime design and [`CAPABILITIES.md`](./CAPABILITIES.md) for supported behavior.
 
-## Verdict: the JMAP FileNode sync path is viable ✅
+## Why JMAP FileNode works for vault sync
 
-The full sync substrate an Obsidian plugin needs already works today.
+JMAP FileNode gives an Obsidian plugin everything it needs — a folder tree, blob-backed
+content, and an incremental change feed. Against **Stalwart 0.16.11**
+(`urn:ietf:params:jmap:filenode` + `:blob`):
 
-## What was proven
+## The FileNode building blocks
 
 | Step | Method | Result |
 |------|--------|--------|
@@ -45,17 +47,9 @@ in-place `update` (preferred) or split destroy/create across two calls.
 
 ## Auth note
 
-Prototype uses HTTP Basic against the bootstrap `admin` account (account id
-`d333333`) — enough to de-risk. The real plugin should use OAuth 2.0 bearer tokens
-(Stalwart supports it) and a dedicated per-user account, not the recovery admin.
-
-## Next (toward the plugin)
-
-1. OAuth device/bearer flow instead of Basic.
-2. Map an Obsidian vault subtree ↔ FileNode tree under one parent folder.
-3. Sync loop: local file watcher + `FileNode/changes` polling → reconcile.
-4. Conflict policy using client-managed `modified` + content hash.
-5. Handle the immutable-name / forbidden-char rules on the Obsidian side.
+The plugin authenticates with HTTP Basic today; the JMAP account model supports
+OAuth 2.0 bearer tokens (Stalwart included), which is the intended direction — with a
+dedicated per-user account rather than the admin credential.
 
 ## Compatibility with ignis (Nystik-gh/ignis)
 
@@ -70,8 +64,8 @@ Constraints:
 
 - **Use Obsidian `requestUrl`, not raw `fetch`.** From the browser tab, calls to
   Stalwart are cross-origin → CORS. ignis proxies `requestUrl`/`fetch` through its
-  server, sidestepping CORS. (Prototype uses Node `fetch`+`Buffer`; the browser port
-  must swap to `requestUrl` and `btoa`/`TextEncoder` — don't assume Node `Buffer`.)
+  server, sidestepping CORS. (The plugin uses `requestUrl` + `btoa`/`TextEncoder`; the
+  standalone Node client in `src/` uses `fetch`+`Buffer`.)
 - **Token storage is plaintext under ignis** (`safeStorage` is passthrough). Prefer
   short-lived OAuth bearer tokens over storing a password.
 - **Multi-tab races.** ignis syncs live across tabs; a per-tab Jync loop would race on
