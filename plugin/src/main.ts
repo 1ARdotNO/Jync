@@ -1,6 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, debounce } from "obsidian";
 import { JmapClient } from "./jmap.ts";
-import { SyncEngine, SyncState, JyncConfig, ConflictStrategy } from "./sync.ts";
+import { SyncEngine, SyncState, SyncReport, JyncConfig, ConflictStrategy } from "./sync.ts";
 
 interface JyncSettings extends JyncConfig {
   baseUrl: string;
@@ -36,7 +36,8 @@ export default class JyncPlugin extends Plugin {
   private statusEl!: HTMLElement;
   private intervalId: number | null = null;
   private syncing = false;
-  lastReport: unknown = null; // exposed for e2e/debugging
+  lastReport: SyncReport | null = null; // exposed for e2e/debugging + settings readout
+  lastSyncAt = 0;
 
   async onload() {
     const data = ((await this.loadData()) ?? {}) as Partial<PersistedData>;
@@ -110,6 +111,7 @@ export default class JyncPlugin extends Plugin {
       );
       const r = await engine.sync();
       this.lastReport = r;
+      this.lastSyncAt = Date.now();
       const summary = `↓${r.pulled} +${r.pushedNew} ~${r.pushedEdit} →${r.movedRemote} -${r.deletedRemote} !${r.conflicts}`;
       this.setStatus(summary);
       if (trigger === "manual") new Notice(`Jync synced: ${summary}` + (r.errors.length ? ` (${r.errors.length} errors)` : ""));
@@ -121,6 +123,19 @@ export default class JyncPlugin extends Plugin {
       if (trigger === "manual") new Notice("Jync error: " + e.message);
     } finally {
       this.syncing = false;
+    }
+  }
+
+  /** Verify server URL + credentials and that JMAP FileNode is available. */
+  async testConnection(): Promise<string> {
+    if (!this.settings.password) return "Set a password/token first";
+    try {
+      const client = new JmapClient({ baseUrl: this.settings.baseUrl, user: this.settings.username, pass: this.settings.password });
+      const session = await client.connect();
+      if (!client.hasFileNode()) return `Connected as ${session.username}, but the server does not advertise JMAP FileNode`;
+      return `OK — connected as ${session.username}; FileNode available`;
+    } catch (e: any) {
+      return `Failed: ${e.message}`;
     }
   }
 }
@@ -136,13 +151,31 @@ class JyncSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const save = async () => this.plugin.persist();
 
-    new Setting(containerEl).setName("Server URL").setDesc("Stalwart JMAP origin")
+    // Last-sync readout
+    const lr = this.plugin.lastReport;
+    if (lr) {
+      const when = this.plugin.lastSyncAt ? new Date(this.plugin.lastSyncAt).toLocaleString() : "—";
+      new Setting(containerEl)
+        .setName("Last sync")
+        .setDesc(`${when} · ↓${lr.pulled} +${lr.pushedNew} ~${lr.pushedEdit} →${lr.movedRemote} -${lr.deletedRemote} !${lr.conflicts}${lr.errors.length ? ` · ${lr.errors.length} error(s)` : ""}`);
+    }
+
+    new Setting(containerEl).setName("Server").setHeading();
+    new Setting(containerEl).setName("Server URL").setDesc("JMAP origin (e.g. your Stalwart server)")
       .addText((t) => t.setValue(s.baseUrl).onChange(async (v) => { s.baseUrl = v.trim(); await save(); }));
     new Setting(containerEl).setName("Username")
       .addText((t) => t.setValue(s.username).onChange(async (v) => { s.username = v.trim(); await save(); }));
-    new Setting(containerEl).setName("Password / token").setDesc("Stored in plaintext under ignis — prefer a scoped token")
+    new Setting(containerEl).setName("Password / token").setDesc("Stored in the plugin's data.json — prefer a scoped token")
       .addText((t) => { t.inputEl.type = "password"; t.setValue(s.password).onChange(async (v) => { s.password = v; await save(); }); });
+    new Setting(containerEl).setName("Connection").setDesc("Verify the URL, credentials, and FileNode support")
+      .addButton((b) => b.setButtonText("Test connection").onClick(async () => {
+        b.setButtonText("Testing…").setDisabled(true);
+        const r = await this.plugin.testConnection();
+        new Notice("Jync: " + r);
+        b.setButtonText("Test connection").setDisabled(false);
+      }));
 
+    new Setting(containerEl).setName("Sync").setHeading();
     new Setting(containerEl).setName("Sync root (vault folder)").setDesc("Only this subtree is synced")
       .addText((t) => t.setValue(s.syncRoot).onChange(async (v) => { s.syncRoot = v.trim().replace(/^\/+|\/+$/g, ""); await save(); }));
     new Setting(containerEl).setName("Remote root folder name")
@@ -157,6 +190,7 @@ class JyncSettingTab extends PluginSettingTab {
         .setValue(s.conflictStrategy)
         .onChange(async (v) => { s.conflictStrategy = v as ConflictStrategy; await save(); }));
 
+    new Setting(containerEl).setName("Advanced").setHeading();
     new Setting(containerEl).setName("Sync on change").setDesc("Debounced sync when files under the root change")
       .addToggle((t) => t.setValue(s.syncOnChange).onChange(async (v) => { s.syncOnChange = v; await save(); }));
     new Setting(containerEl).setName("Auto-sync interval (seconds)").setDesc("0 = off")
