@@ -1,0 +1,78 @@
+name: Bug report
+description: Something isn't syncing correctly or the plugin misbehaves.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please don't include credentials or private note contents.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: When I sync, X happens; I expected Y.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure sync root to '...'
+        2. Edit '...'
+        3. Sync
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: jync-version
+    attributes:
+      label: Jync version
+      placeholder: e.g. 0.1.0 (see the plugin in Settings → Community plugins)
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Obsidian desktop (Windows)
+        - Obsidian desktop (macOS)
+        - Obsidian desktop (Linux)
+        - Obsidian mobile (iOS)
+        - Obsidian mobile (Android)
+        - Browser via ignis
+    validations:
+      required: true
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      placeholder: e.g. 1.7.2
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: JMAP server & version
+      placeholder: e.g. Stalwart 0.16.11
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Auth mode
+      options:
+        - Username + password
+        - Bearer token
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console logs
+      description: "Relevant `[jync]` lines from the developer console (Ctrl/Cmd+Shift+I). Redact anything sensitive."
+      render: shell
+    validations:
+      required: false
