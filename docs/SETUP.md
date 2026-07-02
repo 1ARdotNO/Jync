@@ -1,0 +1,66 @@
+# Setup guide
+
+How to get Jync syncing your vault to a JMAP FileNode backend.
+
+## 1. A JMAP FileNode server
+
+You need a server that advertises `urn:ietf:params:jmap:filenode` and
+`urn:ietf:params:jmap:blob`. [Stalwart](https://stalw.art) 0.16+ does, and also serves
+your mail/calendar/contacts.
+
+- **Try it locally:** `docker compose up -d` in this repo starts a Stalwart instance;
+  `docker compose logs stalwart | grep -A2 password` prints the bootstrap admin password.
+- **Existing server:** point Jync at your Stalwart origin (see step 3).
+
+## 2. An account
+
+Create (or use) an account on the server and note its credentials.
+
+> **Do not sync with the admin credential.** Create a dedicated, least-privilege user.
+> Jync authenticates with HTTP Basic today, so **use `https://`** for any non-local
+> server — over plain HTTP the credentials cross the wire in clear.
+
+## 3. Install the plugin
+
+Until Jync is in the community store, install it manually:
+
+```bash
+cd plugin
+npm install
+npm run build
+```
+
+Copy `plugin/manifest.json` and `plugin/main.js` into
+`<your-vault>/.obsidian/plugins/jync/`, then enable **Jync** in
+*Settings → Community plugins*.
+
+## 4. Configure
+
+Open *Settings → Jync* and set:
+
+| Field | Value |
+|-------|-------|
+| Server URL | your JMAP origin, e.g. `https://mail.example.com` |
+| Username / Password | your dedicated account's credentials |
+| Sync root | the vault folder to sync (only this subtree is touched) |
+| Remote root folder | top-level folder name to create on the server |
+| Ignore patterns | globs to exclude (e.g. `*.tmp`, `Excalidraw/`) |
+| Conflict resolution | keep-both (default), prefer-local, or prefer-remote |
+
+Click **Test connection** to verify the URL, credentials, and FileNode support, then
+**Sync now**. Enable *Sync on change* and/or an auto-sync interval for hands-off syncing.
+
+## Running under ignis (browser Obsidian)
+
+Jync runs unmodified inside [ignis](https://github.com/Nystik-gh/ignis). ignis proxies
+plugin network requests server-side and blocks private hosts by default; to reach a
+backend on a private address, allow-list it via `PROXY_ALLOW_PRIVATE_HOSTS` in the ignis
+config. See [`CAPABILITIES.md`](./CAPABILITIES.md).
+
+## Safety notes
+
+- Local deletes are **off by default** — remote deletions won't remove local files unless
+  you enable *Allow local deletes*.
+- Concurrent edits on both sides produce a `… (remote conflict).md` copy; nothing is
+  silently overwritten.
+- Start with a **dedicated test folder** as the sync root before syncing your whole vault.

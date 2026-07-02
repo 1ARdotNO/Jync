@@ -83,9 +83,13 @@ advances past your own writes each cycle, so nothing ping-pongs. Full design in
 
 | Doc | What's inside |
 |-----|---------------|
+| 🚀 [`docs/SETUP.md`](./docs/SETUP.md) | Step-by-step: server, account, install, configure |
 | 📐 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | The FileNode model, the two-way sync loop, conflict handling, and safety guarantees |
 | 📋 [`docs/CAPABILITIES.md`](./docs/CAPABILITIES.md) | Supported operations, file types, and behavior; plus running under ignis |
 | 🔬 [`docs/FINDINGS.md`](./docs/FINDINGS.md) | Design notes: why JMAP FileNode, Stalwart specifics, and the ignis integration paths |
+| 🔐 [`docs/SECURITY-REVIEW.md`](./docs/SECURITY-REVIEW.md) | OWASP/STRIDE review + remediation status |
+
+Contributing? See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Reporting a vulnerability? [`SECURITY.md`](./SECURITY.md).
 
 ## 🗂️ Repository layout
 
