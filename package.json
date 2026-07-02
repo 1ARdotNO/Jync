@@ -12,7 +12,8 @@
     "roundtrip": "node src/roundtrip.ts",
     "probe:edit": "node src/probe-edit.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --test 'plugin/test/**/*.test.mjs'"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
