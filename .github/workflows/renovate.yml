@@ -1,0 +1,37 @@
+name: Renovate
+
+# Self-hosted Renovate. Runs on a schedule (and on demand) using RENOVATE_TOKEN so
+# its PRs are authored by a real user and therefore trigger CI — required for the
+# tests-gated automerge configured in renovate.json. Config lives in renovate.json.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: Renovate log level
+        default: info
+        type: choice
+        options: [debug, info, warn]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: renovate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Renovate
+        uses: renovatebot/github-action@v46.1.17
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
