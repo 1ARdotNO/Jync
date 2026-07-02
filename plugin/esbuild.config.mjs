@@ -9,7 +9,9 @@ const opts = {
   target: "es2020",
   platform: "browser", // ignis runs Obsidian in the browser — no Node builtins
   external: ["obsidian", "electron"],
-  sourcemap: "inline",
+  // Inline sourcemap while developing; none in the release build to keep main.js lean.
+  sourcemap: watch ? "inline" : false,
+  minify: !watch,
   logLevel: "info",
   outfile: "main.js",
 };
