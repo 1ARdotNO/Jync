@@ -23,7 +23,7 @@ export interface SyncState {
   rootNodeId?: string;
   changesState?: string;
   folders: Record<string, string>; // relDir ("" = root) -> nodeId
-  files: Record<string, { nodeId: string; hash: string; size: number }>; // relPath -> record
+  files: Record<string, { nodeId: string; hash: string; size: number; mtime?: number }>; // relPath -> record
 }
 
 export interface SyncReport {
@@ -253,26 +253,33 @@ export class SyncEngine {
     // ensure folders (shallow-first)
     for (const d of dirs.sort((a, b) => a.split("/").length - b.split("/").length)) await this.ensureDir(d);
 
-    // Read + hash every local file up front so we can detect renames/moves.
-    const local = new Map<string, { buf: ArrayBuffer; hash: string }>();
+    // Read + hash files that need work. Fast-path: skip a tracked file whose mtime and
+    // size still match the stored record (no read, no hash). `present` tracks every local
+    // path so deletion detection stays correct even when files are skipped.
+    const present = new Set<string>();
+    const local = new Map<string, { buf: ArrayBuffer; hash: string; mtime?: number }>();
     for (const rel of files) {
+      present.add(rel);
+      const prev = this.state.files[rel];
+      const st = await this.adapter.stat(normalizePath(this.cfg.syncRoot + "/" + rel)).catch(() => null);
+      if (prev && prev.mtime != null && st && st.mtime === prev.mtime && st.size === prev.size) continue; // unchanged
       try {
         const buf = await this.readLocal(rel);
-        local.set(rel, { buf, hash: await sha256Hex(buf) });
+        local.set(rel, { buf, hash: await sha256Hex(buf), mtime: st?.mtime });
       } catch (e: any) {
         report.errors.push(`read ${rel}: ${e.message}`);
       }
     }
 
     // Tracked paths no longer present locally, indexed by content hash for move detection.
-    const deletions = Object.keys(this.state.files).filter((r) => !local.has(r));
+    const deletions = Object.keys(this.state.files).filter((r) => !present.has(r));
     const deletedByHash = new Map<string, string>();
     for (const rel of deletions) if (!deletedByHash.has(this.state.files[rel].hash)) deletedByHash.set(this.state.files[rel].hash, rel);
     const consumed = new Set<string>();
 
     // 1) Renames/moves: a new local path whose content matches a deleted path ->
     //    move the existing node (name + parentId) instead of re-uploading the blob.
-    for (const [rel, { hash }] of local) {
+    for (const [rel, { hash, mtime }] of local) {
       if (this.state.files[rel]) continue; // already tracked here
       const oldRel = deletedByHash.get(hash);
       if (!oldRel || consumed.has(oldRel)) continue;
@@ -282,7 +289,7 @@ export class SyncEngine {
         const parentId = await this.ensureDir(parentRel);
         const name = rel.split("/").pop()!;
         await this.client.call("FileNode/set", { accountId: acc, update: { [rec.nodeId]: { name, parentId } } });
-        this.state.files[rel] = { nodeId: rec.nodeId, hash: rec.hash, size: rec.size };
+        this.state.files[rel] = { nodeId: rec.nodeId, hash: rec.hash, size: rec.size, mtime };
         delete this.state.files[oldRel];
         consumed.add(oldRel);
         report.movedRemote++;
@@ -293,9 +300,9 @@ export class SyncEngine {
     }
 
     // 2) Create / edit.
-    for (const [rel, { buf, hash }] of local) {
+    for (const [rel, { buf, hash, mtime }] of local) {
       const prev = this.state.files[rel];
-      if (prev && prev.hash === hash) continue; // unchanged (incl. just-moved nodes)
+      if (prev && prev.hash === hash) { prev.mtime = mtime; continue; } // unchanged — refresh mtime so it fast-paths next time
       try {
         const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
         const parentId = await this.ensureDir(parentRel);
@@ -303,7 +310,7 @@ export class SyncEngine {
         const blob = await this.client.uploadBlob(acc, buf, mimeOf(rel));
         if (prev) {
           await this.client.call("FileNode/set", { accountId: acc, update: { [prev.nodeId]: { blobId: blob.blobId, size: blob.size } } });
-          this.state.files[rel] = { nodeId: prev.nodeId, hash, size: blob.size };
+          this.state.files[rel] = { nodeId: prev.nodeId, hash, size: blob.size, mtime };
           report.pushedEdit++;
           log("push edit", rel);
         } else {
@@ -327,7 +334,7 @@ export class SyncEngine {
             report.pushedNew++;
             log("push new", rel);
           }
-          this.state.files[rel] = { nodeId: id, hash, size: blob.size };
+          this.state.files[rel] = { nodeId: id, hash, size: blob.size, mtime };
         }
       } catch (e: any) {
         report.errors.push(`push ${rel}: ${e.message}`);
