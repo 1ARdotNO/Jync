@@ -33,7 +33,9 @@ npm run test:unit
 
 - **Unit tests** (`plugin/test/**/*.test.mjs`, `npm run test:unit`) — pure logic
   (name validation, ignore globs, mime mapping). Add cases here when you touch
-  `plugin/src/paths.ts` or other pure helpers.
+  `plugin/src/paths.ts` or other pure helpers. CI runs `npm run test:coverage`,
+  which enforces a coverage floor on `paths.ts` (lines ≥90, branches ≥85, funcs ≥90),
+  so keep those helpers well covered.
 - **Integration** (`src/roundtrip.ts`, `src/probe-edit.ts`) — exercise the real JMAP
   protocol against a Stalwart service container (run in CI).
 - **End-to-end** (`e2e/run.mjs`) — drives the plugin inside headless-browser Obsidian.

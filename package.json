@@ -15,7 +15,8 @@
     "probe:edit": "node src/probe-edit.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test 'plugin/test/**/*.test.mjs'"
+    "test:unit": "node --test 'plugin/test/**/*.test.mjs'",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='plugin/src/paths.ts' --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-functions=90 'plugin/test/**/*.test.mjs'"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

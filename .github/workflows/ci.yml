@@ -27,8 +27,8 @@ jobs:
         run: npm run lint
       - name: Typecheck (prototype + scripts)
         run: npm run typecheck
-      - name: Unit tests
-        run: npm run test:unit
+      - name: Unit tests + coverage gate
+        run: npm run test:coverage
       - name: Install plugin deps
         run: npm ci
         working-directory: plugin
