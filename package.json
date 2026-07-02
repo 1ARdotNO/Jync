@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Obsidian <-> JMAP FileNode sync (Stalwart backend). Prototype phase.",
-  "engines": { "node": ">=23.11.1" },
+  "engines": { "node": ">=24.18.0" },
   "scripts": {
     "stalwart:up": "docker compose up -d",
     "stalwart:down": "docker compose down",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@types/node": "^22.20.0",
+    "@types/node": "^24.13.2",
     "eslint": "^9.39.4",
     "globals": "^17.7.0",
     "typescript": "^5.9.3",
