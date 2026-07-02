@@ -30,7 +30,7 @@ npm install
 npm run build
 ```
 
-Copy `plugin/manifest.json` and `plugin/main.js` into
+Copy `manifest.json` (repo root) and `plugin/main.js` into
 `<your-vault>/.obsidian/plugins/jync/`, then enable **Jync** in
 *Settings → Community plugins*.
 

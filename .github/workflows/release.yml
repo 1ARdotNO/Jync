@@ -33,9 +33,9 @@ jobs:
       - name: Verify tag matches manifest version
         run: |
           TAG="${GITHUB_REF_NAME}"
-          VER=$(node -p "require('./plugin/manifest.json').version")
+          VER=$(node -p "require('./manifest.json').version")
           if [ "$TAG" != "$VER" ]; then
-            echo "::error::tag '$TAG' does not match plugin/manifest.json version '$VER'"
+            echo "::error::tag '$TAG' does not match root manifest.json version '$VER'"
             exit 1
           fi
           echo "releasing $TAG"
@@ -43,10 +43,9 @@ jobs:
       - name: Create GitHub Release with Obsidian assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: plugin
         run: |
-          assets=(manifest.json main.js)
-          [ -f styles.css ] && assets+=(styles.css)
+          assets=(manifest.json plugin/main.js)
+          [ -f plugin/styles.css ] && assets+=(plugin/styles.css)
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
