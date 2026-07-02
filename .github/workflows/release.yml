@@ -45,10 +45,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: plugin
         run: |
-          assets="manifest.json main.js"
-          [ -f styles.css ] && assets="$assets styles.css"
+          assets=(manifest.json main.js)
+          [ -f styles.css ] && assets+=(styles.css)
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            $assets
+            "${assets[@]}"
