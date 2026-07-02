@@ -56,7 +56,6 @@ try {
     });
   } else if (action === "eval") {
     result = await page.evaluate((code) => {
-      // eslint-disable-next-line no-eval
       return (async () => eval(code))();
     }, expr);
   }

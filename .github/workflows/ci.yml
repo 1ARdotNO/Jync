@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install root deps
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck (prototype + scripts)
+        run: npm run typecheck
+      - name: Install plugin deps
+        run: npm ci
+        working-directory: plugin
+      - name: Typecheck plugin
+        run: npx tsc --noEmit --allowImportingTsExtensions
+        working-directory: plugin
+      - name: Build plugin
+        run: npm run build
+        working-directory: plugin
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      stalwart:
+        image: stalwartlabs/stalwart:latest
+        env:
+          STALWART_RECOVERY_ADMIN: "admin:jynctestpass"
+        ports:
+          - 8080:8080
+    env:
+      JYNC_BASE: http://localhost:8080
+      JYNC_USER: admin
+      JYNC_PASS: jynctestpass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Wait for Stalwart JMAP
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -u "$JYNC_USER:$JYNC_PASS" "$JYNC_BASE/jmap/session" || true)
+            if [ "$code" = "200" ]; then echo "stalwart ready after ~$((i*2))s"; exit 0; fi
+            sleep 2
+          done
+          echo "stalwart did not become ready"; docker ps -a; exit 1
+      - name: Roundtrip (protocol integration test)
+        run: node src/roundtrip.ts
+      - name: Probe in-place edit
+        run: node src/probe-edit.ts
+
+  dependency-review:
+    name: dependency-review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

@@ -36,7 +36,6 @@ export interface SyncReport {
   errors: string[];
 }
 
-const TEXT_EXT = new Set(["md", "txt", "json", "canvas", "csv", "yml", "yaml", "css", "html", "svg", "xml", "base", "js", "ts"]);
 const MIME: Record<string, string> = {
   md: "text/markdown", txt: "text/plain", json: "application/json", canvas: "application/json",
   csv: "text/csv", yml: "text/yaml", yaml: "text/yaml", css: "text/css", html: "text/html",
@@ -48,7 +47,6 @@ const MIME: Record<string, string> = {
 const log = (...a: unknown[]) => console.log("[jync]", ...a);
 const ext = (p: string) => (p.includes(".") ? p.slice(p.lastIndexOf(".") + 1).toLowerCase() : "");
 const mimeOf = (p: string) => MIME[ext(p)] ?? "application/octet-stream";
-const isText = (p: string) => TEXT_EXT.has(ext(p));
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", buf);

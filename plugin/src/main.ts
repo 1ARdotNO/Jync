@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, TAbstractFile, debounce } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, debounce } from "obsidian";
 import { JmapClient } from "./jmap.ts";
 import { SyncEngine, SyncState, JyncConfig } from "./sync.ts";
 

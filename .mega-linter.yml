@@ -1,0 +1,18 @@
+# MegaLinter config — https://megalinter.io
+# Scoped to non-TypeScript concerns; TS/JS linting is handled by the CI ESLint gate,
+# and dependency/secret/IaC scanning by the dedicated Trivy workflow. This keeps
+# MegaLinter's blocking surface to YAML / JSON / Markdown / GitHub Actions + secrets.
+APPLY_FIXES: none
+SHOW_ELAPSED_TIME: true
+FLAVOR_SUGGESTIONS: false
+PRINT_ALPACA: false
+
+ENABLE_LINTERS:
+  - YAML_YAMLLINT
+  - JSON_JSONLINT
+  - MARKDOWN_MARKDOWNLINT
+  - ACTION_ACTIONLINT
+  - REPOSITORY_SECRETLINT
+
+# Don't lint generated / vendored files.
+FILTER_REGEX_EXCLUDE: (node_modules/|package-lock\.json|plugin/main\.js|stalwart-data/)
