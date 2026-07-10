@@ -55,6 +55,21 @@ in *Settings → Community plugins*. BRAT tracks each new release automatically.
 Open **Settings → Jync**, enter your server URL and credentials, pick a **sync-root folder**,
 and hit sync. That's it.
 
+## 🔐 Credentials & security
+
+Please read before connecting Jync to a real server:
+
+- **Use a dedicated, least-privilege account** — never your server's admin credential.
+- **Prefer a bearer token** (an OAuth access token or app token) over a password: choose
+  *Authentication → Bearer token* in settings.
+- **Use `https://`** for any non-local server. Jync warns you in settings if you point it at
+  a plain-HTTP non-local host.
+- **Credentials are stored in the plugin's `data.json`** (Obsidian's standard plugin storage),
+  in plain text — the same as other plugins that hold tokens. Treat your vault's `.obsidian`
+  directory accordingly.
+
+Full threat model and remediation status: [`docs/SECURITY-REVIEW.md`](./docs/SECURITY-REVIEW.md).
+
 ## 🎬 Conflict-safe sync in action
 
 ```text

@@ -1,6 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, debounce } from "obsidian";
 import { JmapClient } from "./jmap.ts";
-import { SyncEngine, SyncState, SyncReport, JyncConfig, ConflictStrategy } from "./sync.ts";
+import { SyncEngine, SyncState, SyncReport, JyncConfig, ConflictStrategy, setDebug } from "./sync.ts";
 import { JmapAuth } from "./paths.ts";
 
 interface JyncSettings extends JyncConfig {
@@ -11,6 +11,7 @@ interface JyncSettings extends JyncConfig {
   token: string;
   autoSyncSeconds: number;
   syncOnChange: boolean;
+  debug: boolean;
 }
 
 const DEFAULTS: JyncSettings = {
@@ -31,6 +32,7 @@ const DEFAULTS: JyncSettings = {
   conflictStrategy: "copy",
   autoSyncSeconds: 0,
   syncOnChange: true,
+  debug: false,
 };
 
 interface PersistedData {
@@ -63,6 +65,7 @@ export default class JyncPlugin extends Plugin {
     const data = ((await this.loadData()) ?? {}) as Partial<PersistedData>;
     this.settings = Object.assign({}, DEFAULTS, data.settings);
     this.syncState = Object.assign({}, EMPTY_STATE, data.syncState);
+    setDebug(this.settings.debug);
 
     this.statusEl = this.addStatusBarItem();
     this.setStatus("idle");
@@ -85,7 +88,6 @@ export default class JyncPlugin extends Plugin {
     }));
 
     this.applyInterval();
-    console.log("[jync] loaded", { root: this.settings.syncRoot, base: this.settings.baseUrl });
   }
 
   onunload() {
@@ -120,6 +122,7 @@ export default class JyncPlugin extends Plugin {
     if (this.syncing) return;
     const auth = this.authOrNull();
     if (!auth) { new Notice("Jync: set credentials in settings"); return; }
+    setDebug(this.settings.debug);
     this.syncing = true;
     this.setStatus("syncing…");
     if (isInsecureUrl(this.settings.baseUrl)) console.warn("[jync] insecure transport: credentials sent over plain HTTP to a non-local host");
@@ -195,8 +198,7 @@ class JyncSettingTab extends PluginSettingTab {
       const warn = new Setting(containerEl)
         .setName("⚠ Insecure transport")
         .setDesc("Credentials and content are sent over plain HTTP to a non-local host. Use HTTPS.");
-      warn.settingEl.addClass("mod-warning");
-      warn.nameEl.style.color = "var(--text-error)";
+      warn.settingEl.addClass("jync-insecure-warning");
     }
     new Setting(containerEl).setName("Server URL").setDesc("JMAP origin (e.g. your Stalwart server)")
       .addText((t) => t.setValue(s.baseUrl).onChange(async (v) => { s.baseUrl = v.trim(); await save(); }));
@@ -245,6 +247,8 @@ class JyncSettingTab extends PluginSettingTab {
       .addText((t) => t.setValue(String(s.autoSyncSeconds)).onChange(async (v) => { s.autoSyncSeconds = Math.max(0, parseInt(v) || 0); await save(); this.plugin.applyInterval(); }));
     new Setting(containerEl).setName("Allow local deletes").setDesc("DANGER: let remote deletions remove local files")
       .addToggle((t) => t.setValue(s.allowLocalDeletes).onChange(async (v) => { s.allowLocalDeletes = v; await save(); }));
+    new Setting(containerEl).setName("Debug logging").setDesc("Log verbose per-operation sync details to the developer console")
+      .addToggle((t) => t.setValue(s.debug).onChange(async (v) => { s.debug = v; setDebug(v); await save(); }));
 
     new Setting(containerEl).addButton((b) => b.setButtonText("Sync now").setCta().onClick(() => this.plugin.runSync("manual")));
     new Setting(containerEl).addButton((b) => b.setButtonText("Reset sync state").setWarning().onClick(async () => {

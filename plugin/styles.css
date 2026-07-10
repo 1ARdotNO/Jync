@@ -1,0 +1,6 @@
+/* Jync plugin styles */
+
+/* Insecure-transport warning in the settings tab (see F3 in docs/SECURITY-REVIEW.md). */
+.jync-insecure-warning .setting-item-name {
+  color: var(--text-error);
+}
