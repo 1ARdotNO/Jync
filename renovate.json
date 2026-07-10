@@ -33,6 +33,12 @@
       "description": "Group all GitHub Actions bumps into one PR.",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions"
+    },
+    {
+      "description": "Hold TypeScript on v6 until typescript-eslint supports the v7 native compiler (v7 crashes our ESLint gate). Revisit when typescript-eslint ships TS7 support.",
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }
