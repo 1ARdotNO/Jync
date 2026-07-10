@@ -22,7 +22,12 @@ const DEFAULTS: JyncSettings = {
   syncRoot: "Jync",
   remoteRootName: "Jync",
   allowLocalDeletes: false,
-  ignore: [".DS_Store", "*.tmp"],
+  ignore: [
+    ".DS_Store", "._*", ".Spotlight-V100", ".Trashes", // macOS
+    "Thumbs.db", "ehthumbs.db", "desktop.ini", // Windows
+    "*~", ".directory", ".Trash-*", // Linux
+    "*.tmp", // generic
+  ],
   conflictStrategy: "copy",
   autoSyncSeconds: 0,
   syncOnChange: true,
