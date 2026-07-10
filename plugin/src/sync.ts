@@ -42,7 +42,15 @@ export interface SyncReport {
   errors: string[];
 }
 
-const log = (...a: unknown[]) => console.log("[jync]", ...a);
+// Verbose per-operation logging is opt-in (Settings → Jync → Debug logging) so the
+// console stays quiet in normal use. Errors are logged unconditionally by the caller.
+let debugEnabled = false;
+export function setDebug(on: boolean): void {
+  debugEnabled = on;
+}
+const log = (...a: unknown[]) => {
+  if (debugEnabled) console.log("[jync]", ...a);
+};
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", buf);
