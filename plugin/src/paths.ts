@@ -20,6 +20,34 @@ export function buildAuthHeader(auth: JmapAuth): string {
   return auth.type === "bearer" ? `Bearer ${auth.token}` : "Basic " + b64(`${auth.user}:${auth.pass}`);
 }
 
+export type ConflictStrategy = "copy" | "prefer-local" | "prefer-remote";
+
+/**
+ * What to do with one remote file during a first-run reconcile, given whether a
+ * local file exists at the same path and how their content hashes compare.
+ *
+ *  - "download"       remote-only → write it locally
+ *  - "adopt"          both present, identical content → just record state, no transfer
+ *  - "conflict-copy"  both present, differ → keep local, save remote as a conflict copy
+ *  - "overwrite-local" both differ, prefer-remote → replace local with remote
+ *  - "keep-local"     both differ, prefer-local → leave local (push will overwrite remote)
+ */
+export type ReconcileAction = "download" | "adopt" | "conflict-copy" | "overwrite-local" | "keep-local";
+
+export function reconcileDecision(
+  localExists: boolean,
+  localHash: string | null,
+  remoteHash: string,
+  strategy: ConflictStrategy,
+): ReconcileAction {
+  if (!localExists) return "download";
+  if (localHash === remoteHash) return "adopt";
+  // divergent content on both sides
+  if (strategy === "prefer-remote") return "overwrite-local";
+  if (strategy === "prefer-local") return "keep-local";
+  return "conflict-copy";
+}
+
 const MIME: Record<string, string> = {
   md: "text/markdown", txt: "text/plain", json: "application/json", canvas: "application/json",
   csv: "text/csv", yml: "text/yaml", yaml: "text/yaml", css: "text/css", html: "text/html",

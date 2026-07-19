@@ -12,7 +12,7 @@
  */
 import { DataAdapter, normalizePath } from "obsidian";
 import { JmapClient } from "./jmap.ts";
-import { mimeOf, safeSegment, makeIgnore } from "./paths.ts";
+import { mimeOf, safeSegment, makeIgnore, reconcileDecision } from "./paths.ts";
 
 export type ConflictStrategy = "copy" | "prefer-local" | "prefer-remote";
 
@@ -183,6 +183,74 @@ export class SyncEngine {
     return null;
   }
 
+  /** Sibling path for a conflict copy, e.g. "a/note.md" -> "a/note (remote conflict).md". */
+  private conflictPath(rel: string): string {
+    return rel.replace(/(\.[^.]+)?$/, (m) => ` (remote conflict)${m || ""}`);
+  }
+
+  /** List every file node under the remote root (paginated), as {node, rel}. */
+  private async listRemoteFiles(): Promise<{ node: any; rel: string }[]> {
+    const acc = this.accountId();
+    const q = await this.client.call("FileNode/query", { accountId: acc, filter: { ancestorId: this.state.rootNodeId } });
+    const ids: string[] = q.ids ?? [];
+    const cache = new Map<string, any>();
+    const out: { node: any; rel: string }[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const got = await this.client.call("FileNode/get", { accountId: acc, ids: ids.slice(i, i + 200) });
+      for (const node of got.list ?? []) cache.set(node.id, node);
+    }
+    for (const node of cache.values()) {
+      if (node.nodeType === "directory" || !node.blobId) continue; // files only
+      const rel = await this.remotePath(node.id, cache); // null if unsafe/out-of-root (F1)
+      if (rel === null || this.isIgnored(rel)) continue;
+      out.push({ node, rel });
+    }
+    return out;
+  }
+
+  /**
+   * RECONCILE: first-run full two-way merge against an existing remote (no state token yet).
+   * Downloads remote-only files, adopts identical ones, and conflict-copies divergent ones
+   * so onboarding a new device never silently loses data. Local-only files are left for push().
+   */
+  private async reconcile(report: SyncReport): Promise<void> {
+    const acc = this.accountId();
+    const strategy = this.cfg.conflictStrategy ?? "copy";
+    for (const { node, rel } of await this.listRemoteFiles()) {
+      const buf = await this.client.downloadBlobBinary(acc, node.blobId, node.name, node.type ?? "application/octet-stream");
+      const remoteHash = await sha256Hex(buf);
+      const localExists = await this.adapter.exists(normalizePath(this.cfg.syncRoot + "/" + rel));
+      const localHash = localExists ? await sha256Hex(await this.readLocal(rel)) : null;
+      const action = reconcileDecision(localExists, localHash, remoteHash, strategy);
+      switch (action) {
+        case "download":
+        case "overwrite-local":
+          await this.writeLocal(rel, buf);
+          this.state.files[rel] = { nodeId: node.id, hash: remoteHash, size: buf.byteLength };
+          report.pulled++;
+          log("reconcile " + action, rel);
+          break;
+        case "adopt":
+          // identical content — record state so push() skips it (no re-upload)
+          this.state.files[rel] = { nodeId: node.id, hash: remoteHash, size: buf.byteLength };
+          log("reconcile adopt", rel);
+          break;
+        case "conflict-copy": {
+          const cpath = this.conflictPath(rel);
+          await this.writeLocal(cpath, buf);
+          report.conflicts++;
+          // leave `rel` unrecorded so push() adopts+overwrites the remote with the local version
+          log("reconcile CONFLICT — wrote remote copy to", cpath);
+          break;
+        }
+        case "keep-local":
+          // prefer-local: leave `rel` unrecorded so push() overwrites the remote with local
+          log("reconcile keep-local", rel);
+          break;
+      }
+    }
+  }
+
   /** PULL: apply remote changes since the stored state token. */
   private async pull(report: SyncReport): Promise<void> {
     if (!this.state.changesState) return; // first run: nothing to pull
@@ -247,7 +315,7 @@ export class SyncEngine {
             continue;
           }
           if (strategy === "copy") {
-            const cpath = rel.replace(/(\.[^.]+)?$/, (m) => ` (remote conflict)${m || ""}`);
+            const cpath = this.conflictPath(rel);
             await this.writeLocal(cpath, buf);
             report.conflicts++;
             log("CONFLICT — wrote remote copy to", cpath);
@@ -393,7 +461,11 @@ export class SyncEngine {
       if (!this.client.session) await this.client.connect();
       if (!this.client.hasFileNode()) throw new Error("server does not advertise JMAP FileNode");
       await this.ensureRoot();
-      await this.pull(report);
+      if (this.state.changesState) {
+        await this.pull(report); // steady state: incremental changes since our token
+      } else {
+        await this.reconcile(report); // first run: full two-way merge with the existing remote
+      }
       await this.push(report);
       // set the pull baseline to the current state so our own pushes aren't re-pulled next time
       const st = await this.client.call("FileNode/get", { accountId: this.accountId(), ids: [this.state.rootNodeId!] });

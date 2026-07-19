@@ -20,6 +20,21 @@ vault/<syncRoot>/a/          <->     FileNode: name=a,   parentId=<root>, blobId
 Each `sync()` runs two directions against a persisted `SyncState`
 (`{ rootNodeId, changesState, folders{}, files{} }`):
 
+### 0. Reconcile (first run only)
+
+When there is **no `changesState`** yet (a fresh device), `sync()` runs a full two-way
+**reconcile** instead of an incremental pull: it lists the *entire* remote tree and, for
+each remote file, compares content hashes with the local side —
+
+- remote-only → **download**
+- both present, identical → **adopt** (record state, no transfer)
+- both present, differ → **conflict copy** (honor the conflict strategy)
+- local-only → left for push to create
+
+This is what makes onboarding a new device safe: an empty device downloads the vault, and a
+device with a divergent copy keeps both versions rather than clobbering the server. After the
+first run, `changesState` is set and subsequent syncs use the incremental pull below.
+
 ### 1. Pull (remote → local)
 - `FileNode/changes` since `changesState` returns `{created, updated, destroyed}` id sets
   plus a new state token — a true incremental delta, no full re-scan.
