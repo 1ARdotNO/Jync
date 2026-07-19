@@ -56,6 +56,28 @@ Open *Settings → Jync* and set:
 Click **Test connection** to verify the URL, credentials, and FileNode support, then
 **Sync now**. Enable *Sync on change* and/or an auto-sync interval for hands-off syncing.
 
+## Initial sync & adding devices
+
+The **first sync** on any device performs a full two-way reconcile with whatever is
+already on the server, so onboarding is safe in both directions:
+
+- **First device (empty server):** your local notes are uploaded. Nothing to reconcile.
+- **A new device with an *empty* sync-root folder:** the entire remote vault is
+  **downloaded** to the new device.
+- **A new device that already has a copy** of the notes (e.g. you copied the vault over):
+  files are compared by content. Identical files are adopted with no transfer; files that
+  **differ** on both sides are kept as a `… (remote conflict).md` copy — the local version
+  stays in place and the remote version is saved alongside it. **Nothing is silently
+  overwritten.**
+
+After that first reconcile, each device syncs incrementally using the server's change feed.
+
+**Recommended flow for a second device:** point Jync at the *same* server, username, and
+**sync-root folder** as the first device, then Sync. If the new device's sync-root is empty,
+you'll simply receive everything. If you want to avoid conflict copies entirely on a device
+that already holds an older copy, either start it from an empty sync-root folder (let it
+download), or set *Conflict resolution* to **prefer-remote** for the first sync.
+
 ## Running under ignis (browser Obsidian)
 
 Jync runs unmodified inside [ignis](https://github.com/Nystik-gh/ignis). ignis proxies
