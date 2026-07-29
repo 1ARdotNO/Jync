@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Obsidian <-> JMAP FileNode sync (Stalwart backend). Prototype phase.",
   "engines": {
-    "node": ">=24.18.0"
+    "node": ">=24.18.1"
   },
   "scripts": {
     "stalwart:up": "docker compose up -d",
