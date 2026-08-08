@@ -9,7 +9,7 @@
     "dev": "node esbuild.config.mjs --watch"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "obsidian": "^1.13.1",
     "typescript": "^6.0.3"
   }
