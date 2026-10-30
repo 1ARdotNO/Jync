@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Obsidian <-> JMAP FileNode sync (Stalwart backend). Prototype phase.",
   "engines": {
-    "node": ">=24.22.1"
+    "node": ">=24.22.2"
   },
   "scripts": {
     "stalwart:up": "docker compose up -d",
@@ -21,9 +21,9 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "globals": "^17.13.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0"
+    "typescript-eslint": "^8.72.1"
   }
 }
